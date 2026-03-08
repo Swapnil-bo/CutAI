@@ -9,14 +9,18 @@ import ProjectPage from './pages/ProjectPage'
 function ProjectShell() {
   const { id } = useParams()
   const [activeTab, setActiveTab] = useState('script')
+  const [projectTitle, setProjectTitle] = useState(null)
 
   return (
     <div className="h-screen flex flex-col">
-      <Header projectTitle={`Project #${id}`} />
+      <Header projectTitle={projectTitle || `Project #${id}`} />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <MainCanvas>
-          <ProjectPage activeTab={activeTab} />
+          <ProjectPage
+            activeTab={activeTab}
+            onProjectLoad={(p) => setProjectTitle(p.title)}
+          />
         </MainCanvas>
       </div>
     </div>
