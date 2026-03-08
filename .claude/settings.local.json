@@ -6,7 +6,10 @@
       "Bash(mkdir:*)",
       "Bash(python:*)",
       "Bash(curl:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)",
+      "Bash(./venv/Scripts/python:*)"
     ]
   }
 }

@@ -5,12 +5,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 
+from contextlib import asynccontextmanager
+
 from config import ALLOWED_ORIGINS, GENERATED_FRAMES_DIR
+from models.database import init_db
+
+
+@asynccontextmanager
+async def lifespan(app):
+    await init_db()
+    yield
+
 
 app = FastAPI(
     title="CutAI",
     description="AI Film Director & Storyboard Engine",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # CORS — allow frontend dev server
