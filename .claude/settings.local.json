@@ -12,7 +12,8 @@
       "Bash(./venv/Scripts/python:*)",
       "Bash(ollama list:*)",
       "Bash(ollama ps:*)",
-      "Bash(./venv/Scripts/pip install:*)"
+      "Bash(./venv/Scripts/pip install:*)",
+      "Bash(npx vite:*)"
     ]
   }
 }

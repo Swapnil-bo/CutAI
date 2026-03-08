@@ -1,13 +1,103 @@
 @import "tailwindcss";
 
+/* ============================================================
+   CutAI Design System — Dark Film-Editor Aesthetic
+   ============================================================ */
+
+@theme {
+  --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+
+  /* Core palette */
+  --color-surface-900: #0a0a0f;
+  --color-surface-850: #0e0e15;
+  --color-surface-800: #12121a;
+  --color-surface-750: #16161f;
+  --color-surface-700: #1a1a24;
+  --color-surface-600: #242430;
+  --color-surface-500: #3a3a4a;
+  --color-surface-400: #52526a;
+
+  /* Accent — warm amber/gold */
+  --color-accent-500: #f59e0b;
+  --color-accent-400: #fbbf24;
+  --color-accent-300: #fcd34d;
+  --color-accent-600: #d97706;
+
+  /* Film red — for tension / delete / alerts */
+  --color-film-red: #ef4444;
+
+  /* Cool blue — for calm / info */
+  --color-film-blue: #3b82f6;
+
+  /* Emerald — for success */
+  --color-film-green: #10b981;
+}
+
+/* Base styles */
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: #0a0a0f;
+  background-color: var(--color-surface-900);
   color: #e4e4e7;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
   min-height: 100vh;
+}
+
+/* Film grain overlay — subtle texture */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+}
+
+/* Subtle vignette */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.4) 100%);
+}
+
+/* Custom scrollbar — film-dark */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface-850);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-500);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-surface-400);
+}
+
+/* Selection color */
+::selection {
+  background: rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+
+/* Screenplay text helper class */
+.font-screenplay {
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
 }
