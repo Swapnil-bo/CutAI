@@ -6,6 +6,7 @@ import { API_URL } from '../utils/constants'
 import ScriptEditor from '../components/script/ScriptEditor'
 import ScriptGenerator from '../components/script/ScriptGenerator'
 import GenerationProgress from '../components/script/GenerationProgress'
+import StoryboardCanvas from '../components/storyboard/StoryboardCanvas'
 
 const TABS = {
   script: { label: 'Script', icon: FileText },
@@ -237,12 +238,7 @@ export default function ProjectPage({ activeTab, onProjectLoad }) {
         )}
 
         {activeTab === 'storyboard' && (
-          <div className="text-center py-20">
-            <LayoutGrid className="w-10 h-10 text-surface-600 mx-auto mb-3" />
-            <p className="text-sm text-surface-400 font-mono">
-              Storyboard canvas will be built in Step 11
-            </p>
-          </div>
+          <StoryboardCanvas />
         )}
         {activeTab === 'timeline' && (
           <div className="text-center py-20">
