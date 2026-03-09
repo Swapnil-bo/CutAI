@@ -8,6 +8,7 @@ import StoryboardCanvas from '../components/storyboard/StoryboardCanvas'
 import VisualTimeline from '../components/timeline/VisualTimeline'
 import MoodGraph from '../components/analysis/MoodGraph'
 import SoundtrackPanel from '../components/analysis/SoundtrackPanel'
+import CameraBreakdown from '../components/analysis/CameraBreakdown'
 
 const TABS = {
   script: { label: 'Script', icon: FileText },
@@ -186,6 +187,7 @@ export default function ProjectPage() {
         {activeTab === 'analysis' && (
           <div className="space-y-6">
             <MoodGraph />
+            <CameraBreakdown />
             <SoundtrackPanel />
           </div>
         )}
