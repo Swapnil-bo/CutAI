@@ -1,10 +1,21 @@
-"""Ollama LLM client wrapper for CutAI. Uses qwen2.5:7b with forced JSON output."""
+"""LLM client wrapper for CutAI.
+
+Supports two providers:
+- local: Ollama with qwen2.5:7b (forced JSON output)
+- groq: Groq cloud API with llama-3.1-8b-instant
+"""
 
 import re
 import json
-import ollama
 
-from config import LLM_MODEL, LLM_NUM_CTX, LLM_TEMPERATURE
+from config import (
+    LLM_PROVIDER,
+    LLM_MODEL,
+    LLM_NUM_CTX,
+    LLM_TEMPERATURE,
+    GROQ_API_KEY,
+    GROQ_MODEL,
+)
 
 
 def clean_json_response(text: str) -> dict:
@@ -26,19 +37,14 @@ def clean_json_response(text: str) -> dict:
     return json.loads(text)
 
 
-def chat(messages: list[dict], temperature: float | None = None) -> dict:
-    """Send a chat request to Ollama and return parsed JSON.
+# ---------------------------------------------------------------------------
+# Provider-specific chat implementations
+# ---------------------------------------------------------------------------
 
-    Args:
-        messages: List of {"role": ..., "content": ...} dicts.
-        temperature: Override default temperature if needed.
+def _chat_ollama(messages: list[dict], temperature: float | None = None) -> dict:
+    """Send a chat request to Ollama and return parsed JSON."""
+    import ollama
 
-    Returns:
-        Parsed dict from the LLM's JSON response.
-
-    Raises:
-        json.JSONDecodeError: If response cannot be parsed as JSON after cleaning.
-    """
     response = ollama.chat(
         model=LLM_MODEL,
         messages=messages,
@@ -50,6 +56,43 @@ def chat(messages: list[dict], temperature: float | None = None) -> dict:
     )
     raw_text = response["message"]["content"]
     return clean_json_response(raw_text)
+
+
+def _chat_groq(messages: list[dict], temperature: float | None = None) -> dict:
+    """Send a chat request to Groq cloud API and return parsed JSON."""
+    from groq import Groq
+
+    client = Groq(api_key=GROQ_API_KEY)
+    response = client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=messages,
+        temperature=temperature if temperature is not None else LLM_TEMPERATURE,
+        response_format={"type": "json_object"},
+    )
+    raw_text = response.choices[0].message.content
+    return clean_json_response(raw_text)
+
+
+# ---------------------------------------------------------------------------
+# Public API — auto-dispatches based on LLM_PROVIDER
+# ---------------------------------------------------------------------------
+
+def chat(messages: list[dict], temperature: float | None = None) -> dict:
+    """Send a chat request to the configured LLM provider and return parsed JSON.
+
+    Args:
+        messages: List of {"role": ..., "content": ...} dicts.
+        temperature: Override default temperature if needed.
+
+    Returns:
+        Parsed dict from the LLM's JSON response.
+
+    Raises:
+        json.JSONDecodeError: If response cannot be parsed as JSON after cleaning.
+    """
+    if LLM_PROVIDER == "groq":
+        return _chat_groq(messages, temperature)
+    return _chat_ollama(messages, temperature)
 
 
 def chat_with_retry(messages: list[dict], retries: int = 3, temperature: float | None = None) -> dict:
