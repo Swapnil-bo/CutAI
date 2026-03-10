@@ -4,6 +4,7 @@ Each function makes a separate, focused LLM call to Qwen 2.5 7B via Ollama.
 All outputs are validated against Pydantic schemas before returning.
 """
 
+from config import IMAGE_PROVIDER
 from models.schemas import Shot, MoodScore, SoundtrackVibe
 from services.llm_client import chat_with_retry
 
@@ -57,7 +58,7 @@ Return a JSON object with:
 
 Respond ONLY with valid JSON. No markdown, no explanation."""
 
-SD_PROMPT_PROMPT = """\
+SD_PROMPT_SD15 = """\
 You are CutAI, an expert at writing image generation prompts optimized for \
 Stable Diffusion 1.5 (512x512).
 
@@ -69,6 +70,9 @@ highly detailed visual prompt. Include:
 - Composition cues (rule of thirds, centered, leading lines)
 - Atmosphere (smoke haze, rain, dust particles, fog)
 
+Use keyword-style prompts with quality boosters: "cinematic, 8k, masterpiece, \
+trending on artstation, highly detailed, photorealistic".
+
 Do NOT include character names — describe their appearance instead.
 Keep each prompt under 120 words for best SD 1.5 results.
 
@@ -76,6 +80,36 @@ Return a JSON object: {"prompts": ["prompt1", "prompt2", ...]}
 Order must match the input shot order.
 
 Respond ONLY with valid JSON. No markdown, no explanation."""
+
+SD_PROMPT_SDXL = """\
+You are CutAI, an expert at writing image generation prompts optimized for \
+SDXL (1024x1024).
+
+Given a list of shot descriptions, rewrite each shot's sd_prompt to be a \
+detailed natural language description of the image to generate. Write in \
+flowing, descriptive sentences — NOT keyword lists.
+
+Describe in natural language:
+- What is happening in the scene and who is visible
+- The environment, setting, and time of day
+- Lighting quality and color mood
+- Camera perspective and framing
+- Artistic style (e.g. "a cinematic still from a neo-noir thriller")
+
+Do NOT include character names — describe their appearance instead.
+Keep each prompt 1-3 sentences.
+
+Return a JSON object: {"prompts": ["prompt1", "prompt2", ...]}
+Order must match the input shot order.
+
+Respond ONLY with valid JSON. No markdown, no explanation."""
+
+
+def _get_sd_prompt_system() -> str:
+    """Return the appropriate SD prompt system prompt based on IMAGE_PROVIDER."""
+    if IMAGE_PROVIDER == "replicate":
+        return SD_PROMPT_SDXL
+    return SD_PROMPT_SD15
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +218,7 @@ def generate_sd_prompts(shots: list[Shot]) -> list[Shot]:
     ]
 
     messages = [
-        {"role": "system", "content": SD_PROMPT_PROMPT},
+        {"role": "system", "content": _get_sd_prompt_system()},
         {
             "role": "user",
             "content": (
