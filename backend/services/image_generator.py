@@ -1,18 +1,17 @@
-"""Stable Diffusion 1.5 storyboard frame generator.
+"""Storyboard frame generator.
 
-Loads SD 1.5 in float16 on CUDA with VRAM optimizations
-(attention slicing + VAE slicing) to fit within RTX 3050 6GB.
-Integrates with VRAMManager to ensure LLM is unloaded before loading SD.
+Supports two providers:
+- local: Stable Diffusion 1.5 via diffusers (float16, CUDA, VRAM-optimized)
+- replicate: SDXL via Replicate cloud API
+
+Integrates with VRAMManager for local mode to ensure LLM is unloaded first.
 """
 
 import os
 from pathlib import Path
 
-import torch
-from diffusers import StableDiffusionPipeline
-from PIL import Image
-
 from config import (
+    IMAGE_PROVIDER,
     GENERATED_FRAMES_DIR,
     SD_GUIDANCE_SCALE,
     SD_HEIGHT,
@@ -20,6 +19,8 @@ from config import (
     SD_MODEL_ID,
     SD_NEGATIVE_PROMPT,
     SD_WIDTH,
+    REPLICATE_API_TOKEN,
+    REPLICATE_SDXL_MODEL,
 )
 from services.vram_manager import vram_manager
 
@@ -31,7 +32,11 @@ def _ensure_output_dir() -> Path:
     return path
 
 
-def _load_pipeline() -> StableDiffusionPipeline:
+# ===================================================================
+# Local SD 1.5 pipeline (RTX 3050 6GB)
+# ===================================================================
+
+def _load_pipeline():
     """Load SD 1.5 pipeline with float16 and VRAM optimizations.
 
     ALL THREE optimizations for 6GB VRAM:
@@ -39,6 +44,9 @@ def _load_pipeline() -> StableDiffusionPipeline:
     2. enable_vae_slicing() — prevents VRAM spike during VAE decode
     3. enable_model_cpu_offload() — available as fallback if still OOM
     """
+    import torch
+    from diffusers import StableDiffusionPipeline
+
     pipe = StableDiffusionPipeline.from_pretrained(
         SD_MODEL_ID,
         torch_dtype=torch.float16,
@@ -53,13 +61,16 @@ def _load_pipeline() -> StableDiffusionPipeline:
     return pipe
 
 
-def _load_pipeline_with_cpu_offload() -> StableDiffusionPipeline:
+def _load_pipeline_with_cpu_offload():
     """Fallback loader using model_cpu_offload for extreme VRAM pressure.
 
     Slower but guaranteed to fit in 6GB. Use only if _load_pipeline() OOMs.
     NOTE: Do NOT call pipe.to("cuda") when using cpu_offload — it manages
     device placement automatically.
     """
+    import torch
+    from diffusers import StableDiffusionPipeline
+
     pipe = StableDiffusionPipeline.from_pretrained(
         SD_MODEL_ID,
         torch_dtype=torch.float16,
@@ -73,43 +84,16 @@ def _load_pipeline_with_cpu_offload() -> StableDiffusionPipeline:
     return pipe
 
 
-async def load_sd_pipeline(use_cpu_offload: bool = False) -> None:
-    """Load the SD pipeline into VRAM via the VRAMManager.
-
-    Ensures LLM is unloaded first, then loads SD.
-    """
-    # VRAMManager.load_sd() handles unloading LLM if needed
-    await vram_manager.load_sd()
-
-    if vram_manager.sd_pipeline is None:
-        if use_cpu_offload:
-            vram_manager.sd_pipeline = _load_pipeline_with_cpu_offload()
-        else:
-            vram_manager.sd_pipeline = _load_pipeline()
-
-
-async def unload_sd_pipeline() -> None:
-    """Unload SD pipeline and free VRAM."""
-    await vram_manager.unload_sd()
-
-
-async def generate_frame(
+async def _generate_frame_local(
     sd_prompt: str,
     scene_id: int,
     shot_number: int,
     use_cpu_offload: bool = False,
 ) -> str:
-    """Generate a single storyboard frame and save as PNG.
+    """Generate a frame using local SD 1.5 pipeline."""
+    import torch
+    from PIL import Image
 
-    Args:
-        sd_prompt: Optimized prompt for Stable Diffusion.
-        scene_id: Scene identifier for filename.
-        shot_number: Shot number within the scene.
-        use_cpu_offload: If True, use CPU offload fallback for tight VRAM.
-
-    Returns:
-        Relative file path to the saved frame image.
-    """
     output_dir = _ensure_output_dir()
 
     # Ensure SD pipeline is loaded
@@ -136,8 +120,97 @@ async def generate_frame(
     filepath = output_dir / filename
     image.save(filepath, format="PNG")
 
-    # Return relative path (for DB storage and API responses)
     return str(filepath)
+
+
+# ===================================================================
+# Replicate SDXL (production)
+# ===================================================================
+
+async def _generate_frame_replicate(
+    sd_prompt: str,
+    scene_id: int,
+    shot_number: int,
+) -> str:
+    """Generate a frame using Replicate SDXL API."""
+    import httpx
+    import replicate
+
+    output_dir = _ensure_output_dir()
+
+    os.environ["REPLICATE_API_TOKEN"] = REPLICATE_API_TOKEN
+
+    output = replicate.run(
+        REPLICATE_SDXL_MODEL,
+        input={
+            "prompt": sd_prompt,
+            "negative_prompt": SD_NEGATIVE_PROMPT,
+            "width": 1024,
+            "height": 1024,
+            "num_inference_steps": 30,
+            "guidance_scale": 7.5,
+        },
+    )
+
+    # Replicate returns a list of URLs; download the first image
+    image_url = output[0] if isinstance(output, list) else str(output)
+
+    filename = f"scene_{scene_id}_shot_{shot_number}.png"
+    filepath = output_dir / filename
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(str(image_url))
+        resp.raise_for_status()
+        filepath.write_bytes(resp.content)
+
+    return str(filepath)
+
+
+# ===================================================================
+# Public API — auto-dispatches based on IMAGE_PROVIDER
+# ===================================================================
+
+async def load_sd_pipeline(use_cpu_offload: bool = False) -> None:
+    """Load the SD pipeline into VRAM via the VRAMManager (local mode only).
+
+    No-op for Replicate provider (cloud-based, no local pipeline).
+    """
+    if IMAGE_PROVIDER == "replicate":
+        return
+
+    # VRAMManager.load_sd() handles unloading LLM if needed
+    await vram_manager.load_sd()
+
+    if vram_manager.sd_pipeline is None:
+        if use_cpu_offload:
+            vram_manager.sd_pipeline = _load_pipeline_with_cpu_offload()
+        else:
+            vram_manager.sd_pipeline = _load_pipeline()
+
+
+async def unload_sd_pipeline() -> None:
+    """Unload SD pipeline and free VRAM (local mode only)."""
+    if IMAGE_PROVIDER == "replicate":
+        return
+    await vram_manager.unload_sd()
+
+
+async def generate_frame(
+    sd_prompt: str,
+    scene_id: int,
+    shot_number: int,
+    use_cpu_offload: bool = False,
+) -> str:
+    """Generate a single storyboard frame and save as PNG.
+
+    Auto-dispatches to local SD 1.5 or Replicate SDXL based on IMAGE_PROVIDER.
+
+    Returns:
+        Relative file path to the saved frame image.
+    """
+    if IMAGE_PROVIDER == "replicate":
+        return await _generate_frame_replicate(sd_prompt, scene_id, shot_number)
+    return await _generate_frame_local(sd_prompt, scene_id, shot_number, use_cpu_offload)
 
 
 async def generate_frames_for_scene(
@@ -147,19 +220,14 @@ async def generate_frames_for_scene(
 ) -> list[str]:
     """Generate frames for all shots in a scene.
 
-    Loads SD once, generates all frames, then the caller is responsible
-    for unloading via unload_sd_pipeline() when all scenes are done.
-
-    Args:
-        shots: List of dicts with at least 'shot_number' and 'sd_prompt' keys.
-        scene_id: Scene identifier.
-        use_cpu_offload: If True, use CPU offload fallback.
+    Loads SD once (local mode), generates all frames, then the caller is
+    responsible for unloading via unload_sd_pipeline() when all scenes are done.
 
     Returns:
         List of file paths to generated frame images.
     """
-    # Ensure pipeline is loaded
-    if vram_manager.sd_pipeline is None:
+    # Ensure pipeline is loaded (no-op for replicate)
+    if IMAGE_PROVIDER != "replicate" and vram_manager.sd_pipeline is None:
         await load_sd_pipeline(use_cpu_offload=use_cpu_offload)
 
     paths = []
