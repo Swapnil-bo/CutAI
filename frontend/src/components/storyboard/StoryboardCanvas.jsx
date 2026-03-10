@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   DndContext,
@@ -15,14 +15,14 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { AnimatePresence } from 'framer-motion'
-import { LayoutGrid } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { LayoutGrid, Plus, AlertTriangle } from 'lucide-react'
 import useStoryboardStore from '../../stores/useStoryboardStore'
 import SceneCard from './SceneCard'
 import ShotPanel from './ShotPanel'
 
 // Wrapper that connects each SceneCard to dnd-kit's sortable system
-function SortableSceneCard({ scene, isSelected, onSelect }) {
+function SortableSceneCard({ scene, isSelected, onSelect, onDelete }) {
   const {
     attributes,
     listeners,
@@ -46,14 +46,17 @@ function SortableSceneCard({ scene, isSelected, onSelect }) {
       onClick={() => onSelect(scene.id)}
       dragHandleProps={{ ...attributes, ...listeners }}
       style={style}
+      onDelete={onDelete}
     />
   )
 }
 
 export default function StoryboardCanvas() {
   const { id: projectId } = useParams()
-  const { scenes, loading, selectedSceneId, loadFromProject, selectScene, setScenes } =
+  const { scenes, loading, selectedSceneId, loadFromProject, selectScene, setScenes, addScene, deleteScene } =
     useStoryboardStore()
+
+  const [deleteTarget, setDeleteTarget] = useState(null)
 
   useEffect(() => {
     if (projectId) loadFromProject(projectId)
@@ -90,6 +93,25 @@ export default function StoryboardCanvas() {
 
   const selectedScene = scenes.find((s) => s.id === selectedSceneId) || null
 
+  // Get script ID for adding scenes
+  const scriptId = scenes[0]?.script_id
+
+  async function handleAddScene() {
+    if (!scriptId) return
+    await addScene(scriptId)
+  }
+
+  function handleDeleteRequest(sceneId) {
+    setDeleteTarget(sceneId)
+  }
+
+  async function handleDeleteConfirm() {
+    if (deleteTarget) {
+      await deleteScene(deleteTarget)
+      setDeleteTarget(null)
+    }
+  }
+
   // Empty state
   if (!loading && scenes.length === 0) {
     return (
@@ -120,6 +142,22 @@ export default function StoryboardCanvas() {
 
   return (
     <>
+      {/* Top bar with add scene */}
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-xs text-surface-400 font-mono">
+          {scenes.length} scene{scenes.length !== 1 ? 's' : ''}
+        </span>
+        {scriptId && (
+          <button
+            onClick={handleAddScene}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-300 bg-surface-800 hover:bg-surface-750 border border-surface-700 hover:border-accent-500/30 rounded-lg transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Scene
+          </button>
+        )}
+      </div>
+
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -136,6 +174,7 @@ export default function StoryboardCanvas() {
                 scene={scene}
                 isSelected={selectedSceneId === scene.id}
                 onSelect={selectScene}
+                onDelete={handleDeleteRequest}
               />
             ))}
           </div>
@@ -149,6 +188,54 @@ export default function StoryboardCanvas() {
             scene={selectedScene}
             onClose={() => selectScene(null)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Delete confirmation modal */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60]"
+              onClick={() => setDeleteTarget(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-800 border border-surface-600 rounded-xl p-6 w-full max-w-sm z-[61] shadow-2xl"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-zinc-200">Delete Scene</h3>
+                  <p className="text-xs text-surface-400">This cannot be undone.</p>
+                </div>
+              </div>
+              <p className="text-xs text-zinc-400 mb-5">
+                This will permanently remove the scene and all its shots from the storyboard.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteConfirm}
+                  className="px-4 py-1.5 bg-red-500/80 hover:bg-red-500 text-white text-xs font-semibold rounded-lg transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </>

@@ -310,6 +310,7 @@ async def export_storyboard(
                 "scenes": [
                     {
                         "id": scene.id,
+                        "script_id": script.id,
                         "scene_number": scene.scene_number,
                         "title": scene.title,
                         "location": scene.location,

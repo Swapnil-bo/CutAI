@@ -114,6 +114,24 @@ class SceneReorder(BaseModel):
     scene_ids: list[int]
 
 
+class SceneCreate(BaseModel):
+    """Create a new blank scene."""
+    title: str = "New Scene"
+    location: str | None = None
+    time_of_day: str | None = None
+    description: str | None = None
+
+
+class RegenerateFrameRequest(BaseModel):
+    """Request to regenerate a shot frame with an optional custom prompt."""
+    sd_prompt: str | None = None
+
+
+class ShotPromptUpdate(BaseModel):
+    """Update the SD prompt for a shot."""
+    sd_prompt: str
+
+
 # --- Full response models for export ---
 
 class ShotResponse(BaseModel):

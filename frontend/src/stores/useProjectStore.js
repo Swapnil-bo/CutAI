@@ -43,6 +43,12 @@ const useProjectStore = create((set, get) => ({
     }))
   },
 
+  duplicateProject: async (id) => {
+    const { data } = await api.post(`/api/projects/${id}/duplicate`)
+    set((s) => ({ projects: [data, ...s.projects] }))
+    return data
+  },
+
   clearCurrentProject: () => set({ currentProject: null }),
 }))
 

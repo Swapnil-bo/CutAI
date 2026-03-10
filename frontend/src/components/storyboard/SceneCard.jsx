@@ -1,8 +1,20 @@
-import { forwardRef } from 'react'
+import { forwardRef, useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { GripVertical, MapPin, Clock, Image } from 'lucide-react'
+import {
+  GripVertical,
+  MapPin,
+  Clock,
+  Image,
+  Pencil,
+  Check,
+  X,
+  Trash2,
+  RefreshCw,
+  Loader2,
+} from 'lucide-react'
 import { API_URL } from '../../utils/constants'
 import { formatDuration } from '../../utils/helpers'
+import useStoryboardStore from '../../stores/useStoryboardStore'
 
 const MOOD_COLORS = {
   melancholic: { bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-blue-500/30' },
@@ -22,15 +34,66 @@ function getMoodStyle(mood) {
 }
 
 const SceneCard = forwardRef(function SceneCard(
-  { scene, isSelected, isDragging, onClick, dragHandleProps, style, ...props },
+  { scene, isSelected, isDragging, onClick, dragHandleProps, style, onDelete, ...props },
   ref,
 ) {
+  const [editing, setEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState(scene.title)
+  const titleRef = useRef(null)
+  const updateScene = useStoryboardStore((s) => s.updateScene)
+  const regenerateScene = useStoryboardStore((s) => s.regenerateScene)
+  const regenerating = useStoryboardStore((s) => s.regenerating)
+  const isRegenerating = regenerating === scene.id
+
   const mood = scene.mood?.overall_mood || 'neutral'
   const moodStyle = getMoodStyle(mood)
   const totalDuration = (scene.shots || []).reduce((sum, s) => sum + (s.duration_seconds || 0), 0)
   const frameUrl = scene.frame_image_path
     ? `${API_URL}/${scene.frame_image_path.replace(/\\/g, '/')}`
     : null
+
+  useEffect(() => {
+    if (editing && titleRef.current) {
+      titleRef.current.focus()
+      titleRef.current.select()
+    }
+  }, [editing])
+
+  function handleEditStart(e) {
+    e.stopPropagation()
+    setEditTitle(scene.title)
+    setEditing(true)
+  }
+
+  async function handleEditSave(e) {
+    e.stopPropagation()
+    const trimmed = editTitle.trim()
+    if (trimmed && trimmed !== scene.title) {
+      await updateScene(scene.id, { title: trimmed })
+    }
+    setEditing(false)
+  }
+
+  function handleEditCancel(e) {
+    e.stopPropagation()
+    setEditing(false)
+    setEditTitle(scene.title)
+  }
+
+  function handleEditKeyDown(e) {
+    if (e.key === 'Enter') handleEditSave(e)
+    if (e.key === 'Escape') handleEditCancel(e)
+  }
+
+  async function handleRegenerate(e) {
+    e.stopPropagation()
+    await regenerateScene(scene.id)
+  }
+
+  function handleDeleteClick(e) {
+    e.stopPropagation()
+    if (onDelete) onDelete(scene.id)
+  }
 
   return (
     <motion.div
@@ -52,6 +115,14 @@ const SceneCard = forwardRef(function SceneCard(
         }
       `}
     >
+      {/* Regenerating overlay */}
+      {isRegenerating && (
+        <div className="absolute inset-0 bg-surface-900/70 backdrop-blur-sm z-30 flex flex-col items-center justify-center">
+          <Loader2 className="w-6 h-6 text-accent-500 animate-spin mb-2" />
+          <span className="text-[10px] font-mono text-accent-400">Regenerating...</span>
+        </div>
+      )}
+
       {/* Thumbnail area */}
       <div className="aspect-video bg-surface-850 relative overflow-hidden">
         {frameUrl ? (
@@ -92,14 +163,66 @@ const SceneCard = forwardRef(function SceneCard(
             </span>
           </div>
         )}
+
+        {/* Action buttons on hover */}
+        <div className="absolute bottom-2 left-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={handleRegenerate}
+            disabled={isRegenerating}
+            className="w-6 h-6 rounded bg-black/60 backdrop-blur-sm flex items-center justify-center hover:bg-accent-500/30 transition-colors"
+            title="Regenerate scene"
+          >
+            <RefreshCw className="w-3 h-3 text-zinc-300" />
+          </button>
+          <button
+            onClick={handleDeleteClick}
+            className="w-6 h-6 rounded bg-black/60 backdrop-blur-sm flex items-center justify-center hover:bg-red-500/30 transition-colors"
+            title="Delete scene"
+          >
+            <Trash2 className="w-3 h-3 text-zinc-300" />
+          </button>
+        </div>
       </div>
 
       {/* Card body */}
       <div className="p-3">
-        {/* Title */}
-        <h3 className="text-sm font-semibold text-zinc-200 truncate mb-1">
-          {scene.title}
-        </h3>
+        {/* Title — inline editable */}
+        {editing ? (
+          <div className="flex items-center gap-1 mb-1" onClick={(e) => e.stopPropagation()}>
+            <input
+              ref={titleRef}
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={handleEditKeyDown}
+              className="flex-1 bg-surface-750 border border-accent-500/40 rounded px-1.5 py-0.5 text-sm text-zinc-200 focus:outline-none focus:border-accent-500"
+            />
+            <button
+              onClick={handleEditSave}
+              className="w-5 h-5 flex items-center justify-center text-film-green hover:text-green-400"
+            >
+              <Check className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleEditCancel}
+              className="w-5 h-5 flex items-center justify-center text-surface-400 hover:text-zinc-200"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 mb-1 group/title">
+            <h3 className="text-sm font-semibold text-zinc-200 truncate flex-1">
+              {scene.title}
+            </h3>
+            <button
+              onClick={handleEditStart}
+              className="w-5 h-5 shrink-0 flex items-center justify-center text-surface-500 hover:text-accent-400 opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Edit title"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          </div>
+        )}
 
         {/* Location slug */}
         {scene.location && (
