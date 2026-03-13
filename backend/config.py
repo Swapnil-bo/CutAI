@@ -42,7 +42,7 @@ SD_NEGATIVE_PROMPT = "blurry, low quality, distorted, deformed, text, watermark"
 REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN", "")
 REPLICATE_SDXL_MODEL = os.getenv(
     "REPLICATE_SDXL_MODEL",
-    "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+    "stability-ai/stable-diffusion:ac732df83cea7fff18b8472768c88ad041fa750ff7682a21affe81863cbe77e4",
 )
 
 # Paths

@@ -1,9 +1,10 @@
 """Storyboard frame generator.
 
-Cloud-only mode: Replicate SDXL API.
+Cloud-only mode: Replicate Stable Diffusion API.
 Local Stable Diffusion support disabled for PSU safety.
 """
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -27,9 +28,6 @@ def _ensure_output_dir() -> Path:
 # ===================================================================
 # Local SD 1.5 pipeline — DISABLED (PSU safety)
 # ===================================================================
-# All torch, diffusers, PIL imports and local SD functions removed.
-# If you need local image gen, set IMAGE_PROVIDER=local and re-enable,
-# but this will load the GPU and risk PSU power spikes.
 
 async def _generate_frame_local(
     sd_prompt: str,
@@ -44,46 +42,83 @@ async def _generate_frame_local(
 
 
 # ===================================================================
-# Replicate SDXL (production)
+# Replicate Stable Diffusion (production)
 # ===================================================================
+
+def _run_replicate_sync(model: str, sd_prompt: str, negative_prompt: str) -> str:
+    """Run replicate.run() synchronously and return the image URL string.
+
+    This is called via asyncio.to_thread() because replicate.run() blocks.
+    """
+    import replicate
+
+    os.environ["REPLICATE_API_TOKEN"] = REPLICATE_API_TOKEN
+
+    print(f"[CutAI] Calling Replicate model: {model}")
+    print(f"[CutAI] Prompt: {sd_prompt[:100]}...")
+
+    output = replicate.run(
+        model,
+        input={
+            "prompt": sd_prompt,
+            "width": 512,
+            "height": 512,
+            "num_outputs": 1,
+            "negative_prompt": negative_prompt,
+        },
+    )
+
+    print(f"[CutAI] Replicate raw output type: {type(output)}")
+    print(f"[CutAI] Replicate raw output: {output}")
+
+    # Replicate can return a list of URLs, a FileOutput iterator, or a single URL.
+    # Handle all cases robustly.
+    if isinstance(output, list):
+        image_url = str(output[0])
+    elif hasattr(output, '__iter__'):
+        # FileOutput or iterator — grab first item
+        image_url = str(next(iter(output)))
+    else:
+        image_url = str(output)
+
+    print(f"[CutAI] Resolved image URL: {image_url}")
+    return image_url
+
 
 async def _generate_frame_replicate(
     sd_prompt: str,
     scene_id: int,
     shot_number: int,
 ) -> str:
-    """Generate a frame using Replicate SDXL API."""
+    """Generate a frame using Replicate Stable Diffusion API."""
     import httpx
-    import replicate
 
     output_dir = _ensure_output_dir()
 
-    os.environ["REPLICATE_API_TOKEN"] = REPLICATE_API_TOKEN
-
-    output = replicate.run(
+    # Run replicate.run() in a thread to avoid blocking the event loop
+    image_url = await asyncio.to_thread(
+        _run_replicate_sync,
         REPLICATE_SDXL_MODEL,
-        input={
-            "prompt": sd_prompt,
-            "negative_prompt": SD_NEGATIVE_PROMPT,
-            "width": 1024,
-            "height": 1024,
-            "num_inference_steps": 30,
-            "guidance_scale": 7.5,
-        },
+        sd_prompt,
+        SD_NEGATIVE_PROMPT,
     )
-
-    # Replicate returns a list of URLs; download the first image
-    image_url = output[0] if isinstance(output, list) else str(output)
 
     filename = f"scene_{scene_id}_shot_{shot_number}.png"
     filepath = output_dir / filename
 
-    async with httpx.AsyncClient() as client:
+    print(f"[CutAI] Downloading frame from: {image_url}")
+    async with httpx.AsyncClient(timeout=60.0) as client:
         resp = await client.get(str(image_url))
         resp.raise_for_status()
         filepath.write_bytes(resp.content)
 
-    return str(filepath)
+    print(f"[CutAI] Frame saved to: {filepath}")
+    print(f"[CutAI] File size: {filepath.stat().st_size} bytes")
+
+    # Return forward-slash relative path for URL compatibility
+    relative_path = f"generated/frames/{filename}"
+    print(f"[CutAI] Returning relative path: {relative_path}")
+    return relative_path
 
 
 # ===================================================================
@@ -112,18 +147,21 @@ async def generate_frame(
 ) -> str | None:
     """Generate a single storyboard frame and save as PNG.
 
-    Auto-dispatches to Replicate SDXL (cloud-only mode).
-    Returns None if generation fails (e.g. invalid API token).
+    Auto-dispatches to Replicate (cloud-only mode).
+    Returns None if generation fails.
 
     Returns:
         Relative file path to the saved frame image, or None on failure.
     """
     try:
+        print(f"[CutAI] generate_frame called: scene={scene_id}, shot={shot_number}, provider={IMAGE_PROVIDER}")
         if IMAGE_PROVIDER == "replicate":
             return await _generate_frame_replicate(sd_prompt, scene_id, shot_number)
         return await _generate_frame_local(sd_prompt, scene_id, shot_number, use_cpu_offload)
     except Exception as e:
-        print(f"[CutAI] Frame generation failed for scene {scene_id} shot {shot_number}: {e}")
+        print(f"[CutAI] Frame generation FAILED for scene {scene_id} shot {shot_number}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
