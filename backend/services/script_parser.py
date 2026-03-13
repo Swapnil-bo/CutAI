@@ -1,11 +1,16 @@
-"""Script generation and parsing service. Uses Qwen 2.5 7B via Ollama."""
+"""Script generation and parsing service.
+
+Two-step pipeline:
+  Step 1 — generate_script(): Free-form screenplay text (NO JSON constraint)
+  Step 2 — parse_script_to_scenes(): LLM converts text → structured JSON (JSON mode)
+"""
 
 import json
 
-from services.llm_client import chat_with_retry
+from services.llm_client import chat_with_retry, chat_text_with_retry
 from models.schemas import Script
 
-# --- System prompts from CLAUDE.md LLM Prompt Strategy ---
+# --- System prompts ---
 
 SCRIPT_GENERATION_PROMPT = """You are CutAI, a creative screenwriter AI. Generate short, compelling scripts (3-7 scenes) based on the user's genre/premise.
 
@@ -16,7 +21,7 @@ Write in standard screenplay format. Each scene should have:
 - Visual moments that translate well to storyboard frames
 
 Keep scripts under 2 pages. Focus on visual storytelling over heavy dialogue.
-Respond ONLY in valid JSON. No markdown, no preamble."""
+Write the screenplay text directly. Do NOT wrap it in JSON."""
 
 SCRIPT_PARSING_PROMPT = """You are CutAI, an expert film director and cinematographer AI. You analyze scripts and break them into detailed, filmable scenes with professional shot-by-shot breakdowns.
 
@@ -81,21 +86,24 @@ SCRIPT_SCHEMA_DESCRIPTION = """{
 def generate_script(genre: str, premise: str, num_scenes: int = 5) -> str:
     """Generate a raw screenplay from genre and premise via LLM.
 
-    Returns the script as a JSON string containing screenplay text.
+    Step 1 of the two-step pipeline. Uses free-form text mode (no JSON
+    constraint) so the LLM can write natural screenplay text.
+
+    Returns:
+        Raw screenplay text as a string.
     """
     messages = [
         {"role": "system", "content": SCRIPT_GENERATION_PROMPT},
         {
             "role": "user",
             "content": (
-                f"Write a {genre} script with {num_scenes} scenes based on this premise: {premise}\n\n"
-                f"Respond in JSON with this structure:\n"
-                f'{{"title": "...", "genre": "{genre}", "logline": "...", "script_text": "...full screenplay text..."}}'
+                f"Write a {genre} script with {num_scenes} scenes based on this premise:\n\n"
+                f"{premise}\n\n"
+                f"Write the full screenplay text with proper slug lines, action, and dialogue."
             ),
         },
     ]
-    result = chat_with_retry(messages, retries=3)
-    return result.get("script_text", json.dumps(result))
+    return chat_text_with_retry(messages, retries=3)
 
 
 def parse_script_to_scenes(script_text: str, genre: str = "drama") -> Script:

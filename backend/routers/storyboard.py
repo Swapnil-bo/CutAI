@@ -222,6 +222,13 @@ async def _run_pipeline(request: StoryboardGenerateRequest):
                             "progress": progress,
                         })
                         path = await generate_frame(sd_prompt, scene_id, shot_number)
+                        if path is None:
+                            yield _sse({
+                                "type": "progress", "stage": "skipping_frame",
+                                "message": f"Skipping frame {frame_idx} (generation failed)",
+                                "progress": progress,
+                            })
+                            continue
                         if scene_id not in scene_frame_paths:
                             scene_frame_paths[scene_id] = path
 

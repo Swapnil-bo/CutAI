@@ -109,28 +109,33 @@ async def generate_frame(
     scene_id: int,
     shot_number: int,
     use_cpu_offload: bool = False,
-) -> str:
+) -> str | None:
     """Generate a single storyboard frame and save as PNG.
 
     Auto-dispatches to Replicate SDXL (cloud-only mode).
+    Returns None if generation fails (e.g. invalid API token).
 
     Returns:
-        Relative file path to the saved frame image.
+        Relative file path to the saved frame image, or None on failure.
     """
-    if IMAGE_PROVIDER == "replicate":
-        return await _generate_frame_replicate(sd_prompt, scene_id, shot_number)
-    return await _generate_frame_local(sd_prompt, scene_id, shot_number, use_cpu_offload)
+    try:
+        if IMAGE_PROVIDER == "replicate":
+            return await _generate_frame_replicate(sd_prompt, scene_id, shot_number)
+        return await _generate_frame_local(sd_prompt, scene_id, shot_number, use_cpu_offload)
+    except Exception as e:
+        print(f"[CutAI] Frame generation failed for scene {scene_id} shot {shot_number}: {e}")
+        return None
 
 
 async def generate_frames_for_scene(
     shots: list[dict],
     scene_id: int,
     use_cpu_offload: bool = False,
-) -> list[str]:
+) -> list[str | None]:
     """Generate frames for all shots in a scene.
 
     Returns:
-        List of file paths to generated frame images.
+        List of file paths (or None for failed frames).
     """
     paths = []
     for shot in shots:
