@@ -1,10 +1,7 @@
 """Storyboard frame generator.
 
-Supports two providers:
-- local: Stable Diffusion 1.5 via diffusers (float16, CUDA, VRAM-optimized)
-- replicate: SDXL via Replicate cloud API
-
-Integrates with VRAMManager for local mode to ensure LLM is unloaded first.
+Cloud-only mode: Replicate SDXL API.
+Local Stable Diffusion support disabled for PSU safety.
 """
 
 import os
@@ -13,12 +10,7 @@ from pathlib import Path
 from config import (
     IMAGE_PROVIDER,
     GENERATED_FRAMES_DIR,
-    SD_GUIDANCE_SCALE,
-    SD_HEIGHT,
-    SD_INFERENCE_STEPS,
-    SD_MODEL_ID,
     SD_NEGATIVE_PROMPT,
-    SD_WIDTH,
     REPLICATE_API_TOKEN,
     REPLICATE_SDXL_MODEL,
 )
@@ -33,56 +25,11 @@ def _ensure_output_dir() -> Path:
 
 
 # ===================================================================
-# Local SD 1.5 pipeline (RTX 3050 6GB)
+# Local SD 1.5 pipeline — DISABLED (PSU safety)
 # ===================================================================
-
-def _load_pipeline():
-    """Load SD 1.5 pipeline with float16 and VRAM optimizations.
-
-    ALL THREE optimizations for 6GB VRAM:
-    1. enable_attention_slicing() — halves attention layer VRAM usage
-    2. enable_vae_slicing() — prevents VRAM spike during VAE decode
-    3. enable_model_cpu_offload() — available as fallback if still OOM
-    """
-    import torch
-    from diffusers import StableDiffusionPipeline
-
-    pipe = StableDiffusionPipeline.from_pretrained(
-        SD_MODEL_ID,
-        torch_dtype=torch.float16,
-        safety_checker=None,  # Disable for speed + VRAM savings on storyboard use
-    )
-    pipe = pipe.to("cuda")
-
-    # Required VRAM optimizations for RTX 3050 6GB
-    pipe.enable_attention_slicing()
-    pipe.enable_vae_slicing()
-
-    return pipe
-
-
-def _load_pipeline_with_cpu_offload():
-    """Fallback loader using model_cpu_offload for extreme VRAM pressure.
-
-    Slower but guaranteed to fit in 6GB. Use only if _load_pipeline() OOMs.
-    NOTE: Do NOT call pipe.to("cuda") when using cpu_offload — it manages
-    device placement automatically.
-    """
-    import torch
-    from diffusers import StableDiffusionPipeline
-
-    pipe = StableDiffusionPipeline.from_pretrained(
-        SD_MODEL_ID,
-        torch_dtype=torch.float16,
-        safety_checker=None,
-    )
-
-    pipe.enable_model_cpu_offload()
-    pipe.enable_attention_slicing()
-    pipe.enable_vae_slicing()
-
-    return pipe
-
+# All torch, diffusers, PIL imports and local SD functions removed.
+# If you need local image gen, set IMAGE_PROVIDER=local and re-enable,
+# but this will load the GPU and risk PSU power spikes.
 
 async def _generate_frame_local(
     sd_prompt: str,
@@ -90,37 +37,10 @@ async def _generate_frame_local(
     shot_number: int,
     use_cpu_offload: bool = False,
 ) -> str:
-    """Generate a frame using local SD 1.5 pipeline."""
-    import torch
-    from PIL import Image
-
-    output_dir = _ensure_output_dir()
-
-    # Ensure SD pipeline is loaded
-    if vram_manager.sd_pipeline is None:
-        await load_sd_pipeline(use_cpu_offload=use_cpu_offload)
-
-    pipe = vram_manager.sd_pipeline
-
-    # Generate the image
-    with torch.no_grad():
-        result = pipe(
-            prompt=sd_prompt,
-            negative_prompt=SD_NEGATIVE_PROMPT,
-            width=SD_WIDTH,
-            height=SD_HEIGHT,
-            num_inference_steps=SD_INFERENCE_STEPS,
-            guidance_scale=SD_GUIDANCE_SCALE,
-        )
-
-    image: Image.Image = result.images[0]
-
-    # Save to generated/frames/scene_{id}_shot_{number}.png
-    filename = f"scene_{scene_id}_shot_{shot_number}.png"
-    filepath = output_dir / filename
-    image.save(filepath, format="PNG")
-
-    return str(filepath)
+    """Disabled — local SD not available in cloud-only mode."""
+    raise RuntimeError(
+        "Local SD disabled — use Replicate. Set IMAGE_PROVIDER=replicate in your environment."
+    )
 
 
 # ===================================================================
@@ -171,28 +91,17 @@ async def _generate_frame_replicate(
 # ===================================================================
 
 async def load_sd_pipeline(use_cpu_offload: bool = False) -> None:
-    """Load the SD pipeline into VRAM via the VRAMManager (local mode only).
-
-    No-op for Replicate provider (cloud-based, no local pipeline).
-    """
+    """No-op — local SD pipeline disabled in cloud-only mode."""
     if IMAGE_PROVIDER == "replicate":
         return
-
-    # VRAMManager.load_sd() handles unloading LLM if needed
-    await vram_manager.load_sd()
-
-    if vram_manager.sd_pipeline is None:
-        if use_cpu_offload:
-            vram_manager.sd_pipeline = _load_pipeline_with_cpu_offload()
-        else:
-            vram_manager.sd_pipeline = _load_pipeline()
+    raise RuntimeError(
+        "Local SD disabled — use Replicate. Set IMAGE_PROVIDER=replicate in your environment."
+    )
 
 
 async def unload_sd_pipeline() -> None:
-    """Unload SD pipeline and free VRAM (local mode only)."""
-    if IMAGE_PROVIDER == "replicate":
-        return
-    await vram_manager.unload_sd()
+    """No-op — local SD pipeline disabled in cloud-only mode."""
+    return
 
 
 async def generate_frame(
@@ -203,7 +112,7 @@ async def generate_frame(
 ) -> str:
     """Generate a single storyboard frame and save as PNG.
 
-    Auto-dispatches to local SD 1.5 or Replicate SDXL based on IMAGE_PROVIDER.
+    Auto-dispatches to Replicate SDXL (cloud-only mode).
 
     Returns:
         Relative file path to the saved frame image.
@@ -220,16 +129,9 @@ async def generate_frames_for_scene(
 ) -> list[str]:
     """Generate frames for all shots in a scene.
 
-    Loads SD once (local mode), generates all frames, then the caller is
-    responsible for unloading via unload_sd_pipeline() when all scenes are done.
-
     Returns:
         List of file paths to generated frame images.
     """
-    # Ensure pipeline is loaded (no-op for replicate)
-    if IMAGE_PROVIDER != "replicate" and vram_manager.sd_pipeline is None:
-        await load_sd_pipeline(use_cpu_offload=use_cpu_offload)
-
     paths = []
     for shot in shots:
         path = await generate_frame(

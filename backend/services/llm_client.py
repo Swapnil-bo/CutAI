@@ -1,8 +1,7 @@
 """LLM client wrapper for CutAI.
 
-Supports two providers:
-- local: Ollama with qwen2.5:3b (forced JSON output)
-- groq: Groq cloud API with llama-3.1-8b-instant
+Cloud-only mode: Groq API with llama-3.1-8b-instant.
+Local Ollama support disabled for PSU safety.
 """
 
 import re
@@ -10,8 +9,6 @@ import json
 
 from config import (
     LLM_PROVIDER,
-    LLM_MODEL,
-    LLM_NUM_CTX,
     LLM_TEMPERATURE,
     GROQ_API_KEY,
     GROQ_MODEL,
@@ -38,25 +35,22 @@ def clean_json_response(text: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Provider-specific chat implementations
+# Local Ollama — DISABLED (PSU safety)
 # ---------------------------------------------------------------------------
+# All ollama imports and _chat_ollama() removed.
+# If you need local LLM, set LLM_PROVIDER=local and re-enable,
+# but this will load the GPU and risk PSU power spikes.
 
 def _chat_ollama(messages: list[dict], temperature: float | None = None) -> dict:
-    """Send a chat request to Ollama and return parsed JSON."""
-    import ollama
-
-    response = ollama.chat(
-        model=LLM_MODEL,
-        messages=messages,
-        format="json",
-        options={
-            "num_ctx": LLM_NUM_CTX,
-            "temperature": temperature if temperature is not None else LLM_TEMPERATURE,
-        },
+    """Disabled — local LLM not available in cloud-only mode."""
+    raise RuntimeError(
+        "Local LLM disabled — use Groq. Set LLM_PROVIDER=groq in your environment."
     )
-    raw_text = response["message"]["content"]
-    return clean_json_response(raw_text)
 
+
+# ---------------------------------------------------------------------------
+# Groq cloud API
+# ---------------------------------------------------------------------------
 
 def _chat_groq(messages: list[dict], temperature: float | None = None) -> dict:
     """Send a chat request to Groq cloud API and return parsed JSON."""
@@ -88,10 +82,12 @@ def chat(messages: list[dict], temperature: float | None = None) -> dict:
         Parsed dict from the LLM's JSON response.
 
     Raises:
+        RuntimeError: If LLM_PROVIDER is "local" (disabled).
         json.JSONDecodeError: If response cannot be parsed as JSON after cleaning.
     """
     if LLM_PROVIDER == "groq":
         return _chat_groq(messages, temperature)
+    # Local provider is disabled
     return _chat_ollama(messages, temperature)
 
 

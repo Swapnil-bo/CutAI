@@ -14,8 +14,8 @@ PORT = int(os.getenv("PORT", "8000"))
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./cutai.db")
 
 # Provider switches
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "local")        # "local" (Ollama) or "groq"
-IMAGE_PROVIDER = os.getenv("IMAGE_PROVIDER", "local")     # "local" (SD 1.5) or "replicate"
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")          # "groq" only — local disabled for PSU safety
+IMAGE_PROVIDER = os.getenv("IMAGE_PROVIDER", "replicate") # "replicate" only — local disabled for PSU safety
 
 # Ollama / LLM (local)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")

@@ -14,7 +14,17 @@
       "Bash(ollama ps:*)",
       "Bash(./venv/Scripts/pip install:*)",
       "Bash(npx vite:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(cd \"D:/AI MEGA PROJECTS/CutAI/backend\" && pip install -r requirements.txt 2>&1 | tail -5)",
+      "Bash(cd \"D:/AI MEGA PROJECTS/CutAI/backend\" && pip install -r requirements.txt 2>&1 | tail -10)",
+      "Bash(cd \"D:/AI MEGA PROJECTS/CutAI/backend\" && ./venv/Scripts/python.exe -m pip install sqlalchemy --quiet 2>&1 | tail -3)",
+      "Bash(cd \"D:/AI MEGA PROJECTS/CutAI/backend\" && ./venv/Scripts/python.exe -m pip install ollama --quiet 2>&1 | tail -3)",
+      "Bash(cd \"D:/AI MEGA PROJECTS/CutAI/backend\" && ./venv/Scripts/python.exe -m pip install fpdf2 --quiet 2>&1 | tail -3)",
+      "Bash(cd \"D:/AI MEGA PROJECTS/CutAI/backend\" && ./venv/Scripts/python.exe -m pip install replicate --quiet 2>&1 | tail -3)",
+      "Bash(cd \"D:/AI MEGA PROJECTS/CutAI/backend\" && ./venv/Scripts/python.exe -m pip install diffusers --quiet 2>&1 | tail -3)",
+      "Bash(cd \"D:/AI MEGA PROJECTS/CutAI/backend\" && ./venv/Scripts/python.exe -m pip install accelerate --quiet 2>&1 | tail -3)",
+      "Bash(cd \"D:/AI MEGA PROJECTS/CutAI/backend\" && ./venv/Scripts/python.exe -m pip install sqlalchemy diffusers accelerate ollama fpdf2 replicate 2>&1)",
+      "Bash(cd \"D:/AI MEGA PROJECTS/CutAI/backend\" && ./venv/Scripts/python.exe -m pip install sqlalchemy 2>&1)"
     ]
   }
 }
