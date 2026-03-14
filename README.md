@@ -2,6 +2,8 @@
 
 **Turn any idea into a shot-by-shot storyboard with AI-powered scene analysis, mood scoring, and soundtrack vibes.**
 
+🌐 **[Live Demo](https://cut-ai-nbx8.vercel.app)** | 📦 **[GitHub](https://github.com/Swapnil-bo/CutAI)**
+
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
