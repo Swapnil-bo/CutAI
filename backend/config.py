@@ -48,12 +48,14 @@ REPLICATE_SDXL_MODEL = os.getenv(
 # Paths
 GENERATED_FRAMES_DIR = "generated/frames"
 
-# CORS — localhost for dev, add production domains via env
+# CORS — localhost for dev, Vercel for production
 _extra_origins = os.getenv("CORS_ORIGINS", "")
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
+    "https://cut-ai-nbx8.vercel.app",
 ]
 if _extra_origins:
     ALLOWED_ORIGINS.extend(
         origin.strip() for origin in _extra_origins.split(",") if origin.strip()
     )
+ALLOWED_ORIGIN_REGEX = r"https://.*\.vercel\.app"

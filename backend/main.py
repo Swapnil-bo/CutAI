@@ -7,7 +7,7 @@ import os
 
 from contextlib import asynccontextmanager
 
-from config import ALLOWED_ORIGINS, GENERATED_FRAMES_DIR
+from config import ALLOWED_ORIGINS, ALLOWED_ORIGIN_REGEX, GENERATED_FRAMES_DIR
 from models.database import init_db
 from routers import projects, scripts, scenes, storyboard
 
@@ -25,10 +25,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow frontend dev server
+# CORS — allow frontend dev server + Vercel production domains
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
